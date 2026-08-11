@@ -1,9 +1,13 @@
 <?php
-/**
- * api/src/LeadRepository.php
- * Responsabilité unique : lire et écrire les leads en base MySQL.
- */
 
+declare(strict_types=1);
+
+/**
+ * V2 - Persistance minimale des leads.
+ *
+ * Le profil complet sert à l'IA, au PDF et à l'email, mais la majorité des
+ * réponses du questionnaire n'est pas conservée en SQL.
+ */
 class LeadRepository
 {
     private PDO $pdo;
@@ -11,77 +15,70 @@ class LeadRepository
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     }
 
     /**
-     * Insère un nouveau lead avec les données du formulaire.
-     * Retourne l'ID inséré pour la mise à jour IA ultérieure.
+     * Enregistre uniquement les informations nécessaires au suivi du lead.
      */
-    public function insert(array $contact, array $profile): int
+    public function create(array $contact, array $profile, ?string $pdfPath = null): int
     {
-        $sql = "
-            INSERT INTO leads (
-                prenom, nom, email, telephone,
-                delai, type_achat, `usage`, priorite,
-                kilometrage, motorisation, carrosserie,
-                marque, modele, budget,
-                ip_hash, user_agent
-            ) VALUES (
-                :prenom, :nom, :email, :telephone,
-                :delai, :type_achat, :usage, :priorite,
-                :kilometrage, :motorisation, :carrosserie,
-                :marque, :modele, :budget,
-                :ip_hash, :user_agent
-            )
-        ";
+        $sql = <<<'SQL'
+INSERT INTO leads_v2 (
+    prenom,
+    nom,
+    email,
+    telephone,
+    ville,
+    codepostal,
+    budget,
+    type_achat,
+    marques_modeles,
+    recommendation_pdf,
+    created_at
+) VALUES (
+    :prenom,
+    :nom,
+    :email,
+    :telephone,
+    :ville,
+    :codepostal,
+    :budget,
+    :type_achat,
+    :marques_modeles,
+    :recommendation_pdf,
+    NOW()
+)
+SQL;
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
-            // Coordonnées — stockées telles quelles (à chiffrer si besoin RGPD avancé)
-            ':prenom'       => $contact['prenom'],
-            ':nom'          => $contact['nom'],
-            ':email'        => $contact['email'],
-            ':telephone'    => $contact['telephone'],
-
-            // Profil formulaire
-            ':delai'        => $profile['delai']        ?? null,
-            ':type_achat'   => $profile['type_achat']   ?? null,
-            ':usage'        => $profile['usage']        ?? null,
-            ':priorite'     => $profile['priorite']     ?? null,
-            ':kilometrage'  => $profile['kilometrage']  ?? null,
-            ':motorisation' => $profile['motorisation'] ?? null,
-            ':carrosserie'  => $profile['carrosserie']  ?? null,
-            ':marque'       => $profile['marque']       ?? null,
-            ':modele'       => $profile['modele']       ?? null,
-            ':budget'       => $profile['budget'],
-
-            // Tracking RGPD (IP hashée, jamais en clair)
-            ':ip_hash'      => hash('sha256', $_SERVER['REMOTE_ADDR'] ?? ''),
-            ':user_agent'   => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
+            ':prenom' => $this->string($contact['prenom'] ?? ''),
+            ':nom' => $this->string($contact['nom'] ?? ''),
+            ':email' => $this->string($contact['email'] ?? ''),
+            ':telephone' => $this->string($contact['telephone'] ?? ''),
+            ':ville' => $this->string($contact['ville'] ?? ''),
+            ':codepostal' => $this->string($contact['codepostal'] ?? ''),
+            ':budget' => $this->string($profile['budget'] ?? ''),
+            ':type_achat' => $this->string($profile['type_achat'] ?? ''),
+            ':marques_modeles' => $this->json($profile['marques_modeles'] ?? []),
+            ':recommendation_pdf' => $pdfPath,
         ]);
 
         return (int) $this->pdo->lastInsertId();
     }
 
-    /**
-     * Met à jour le lead avec les recommandations retournées par l'IA.
-     * Appelé après l'appel API Claude réussi.
-     */
-    public function updateWithAI(int $leadId, array $recommendations, string $conseil): void
+    private function string(mixed $value): string
     {
-        $sql = "
-            UPDATE leads
-            SET ai_recommandations = :reco,
-                ai_conseil         = :conseil,
-                ai_succes          = 1
-            WHERE id = :id
-        ";
+        return trim((string) $value);
+    }
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
-            ':reco'    => json_encode($recommendations, JSON_UNESCAPED_UNICODE),
-            ':conseil' => $conseil,
-            ':id'      => $leadId,
-        ]);
+    private function json(mixed $value): string
+    {
+        return json_encode(
+            $value,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        );
     }
 }
