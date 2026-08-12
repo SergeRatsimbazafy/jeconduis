@@ -990,41 +990,100 @@ async function submitForm(){
   document.getElementById('aiLoader').style.display='block';
   const loaderInterval=animateLoader();
 
-  const payload={
-    // Contact
-    prenom,nom,email,telephone:tel,
-    ville:       document.getElementById('ville').value.trim()||'',
-    codepostal:  document.getElementById('codepostal').value.trim()||'',
-    // Consentements RGPD
-    optin_cgu:         optinCGU,
-    optin_partenaires: document.getElementById('optin-partenaires').checked,
-    optin_canaux:      document.getElementById('optin-canaux').checked,
-    canaux_choisis:    canaux,
-    // Profil (ordre logique)
-    delai:             answers[0]||'',
-    type_achat:        answers[1]||'',
-    financement:       answers[2]||'',
-    budget:            answers[3]||'',
-    nb_personnes:      answers[4]||'',
-    usage:             answers[5]||'',
-    kilometrage:       answers[6]||'',
-    motorisation:      answers[7]||'',
-    borne_recharge:    answers[8]||'',
-    boite:             answers[9]||'',
-    priorite:          answers[10]||'',
-    carrosserie:       document.getElementById('type_vehicule').value||'',
-    marques_modeles:   JSON.stringify(getMarquesModelesPaylod()),
-    duree_conservation:answers[12]||'',
-    note_libre:        document.getElementById('note_libre').value.trim()||'',
-  };
+  const payload = {
+  contact: {
+    prenom: prenom,
+    nom: nom,
+    email: email,
+    telephone: tel,
+    ville: document.getElementById('ville').value.trim() || '',
+    codepostal: document.getElementById('codepostal').value.trim() || ''
+  },
 
-  try{
-    const res=await fetch('api/recommend.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    clearInterval(loaderInterval);
-    const data=await res.json();
-    if(data.success&&data.recommendations?.length){renderResults(data,prenom);}
-    else{showFallback(prenom,nom,data.error||'');}
-  }catch(err){clearInterval(loaderInterval);showFallback(prenom,nom,'');}
+  profile: {
+    delai: answers[0] || '',
+    type_achat: answers[1] || '',
+    financement: answers[2] || '',
+    budget: answers[3] || '',
+    nb_personnes: answers[4] || '',
+    usage: answers[5] || '',
+    kilometrage: answers[6] || '',
+    motorisation: answers[7] || '',
+    borne_recharge: answers[8] || '',
+    boite: answers[9] || '',
+    priorite: answers[10] || '',
+    carrosserie: document.getElementById('type_vehicule').value || '',
+    marques_modeles: getMarquesModelesPaylod(),
+    duree_conservation: answers[12] || '',
+    note_libre: document.getElementById('note_libre').value.trim() || ''
+  },
+
+  consent: {
+    optin_cgu: optinCGU,
+    optin_partenaires: document.getElementById('optin-partenaires').checked,
+    optin_canaux: document.getElementById('optin-canaux').checked,
+    canaux_choisis: canaux
+  }
+};
+
+try {
+  const res = await fetch('api/recommend.php', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  clearInterval(loaderInterval);
+
+  const raw = await res.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    console.error('[Je-Conduis] Réponse serveur non JSON :', raw);
+
+    showFallback(
+      prenom,
+      nom,
+      'Réponse serveur invalide.'
+    );
+
+    return;
+  }
+
+  if (
+    res.ok &&
+    data.success === true &&
+    Array.isArray(data.recommendations) &&
+    data.recommendations.length === 3
+  ) {
+    renderResults(data, prenom);
+    return;
+  }
+
+  console.error('[Je-Conduis API]', data);
+
+  showFallback(
+    prenom,
+    nom,
+    data.message || 'Impossible de générer les recommandations.'
+  );
+
+} catch (err) {
+  clearInterval(loaderInterval);
+
+  console.error('[Je-Conduis FETCH]', err);
+
+  showFallback(
+    prenom,
+    nom,
+    'Impossible de contacter le serveur.'
+  );
 }
 
 function showFallback(prenom,nom,msg){
