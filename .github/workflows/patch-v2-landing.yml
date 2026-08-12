@@ -1,0 +1,159 @@
+name: Patch V2 landing
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/patch-v2-landing.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v2
+          fetch-depth: 0
+
+      - name: Update recommendation_auto.html
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('jeconduis/recommendation_auto.html')
+          s = p.read_text(encoding='utf-8')
+
+          replacements = []
+          replacements.append((
+          "const selectedMarques = new Set();   // marques ajoutées\nconst selectedModeles = {};          // { marque: Set(modeles) }",
+          "const MAX_MARQUES = 3;\nconst MAX_MODELES_PAR_MARQUE = 3;\nconst selectedMarques = new Set();   // marques ajoutées\nconst selectedModeles = {};          // { marque: Set(modeles) }"))
+
+          replacements.append((
+          "function addMarque(brandName){\n  if(!brandName || selectedMarques.has(brandName)) return;\n  selectedMarques.add(brandName);",
+          "function addMarque(brandName){\n  if(!brandName || selectedMarques.has(brandName)) return;\n  if(selectedMarques.size >= MAX_MARQUES){\n    alert(`Vous pouvez sélectionner au maximum ${MAX_MARQUES} marques.`);\n    return;\n  }\n  selectedMarques.add(brandName);"))
+
+          replacements.append((
+          "  } else {\n    selectedModeles[brand].add(model);\n    chip?.classList.add('selected');\n  }\n}",
+          "  } else {\n    if(selectedModeles[brand].size >= MAX_MODELES_PAR_MARQUE){\n      alert(`Vous pouvez sélectionner au maximum ${MAX_MODELES_PAR_MARQUE} modèles pour ${brand}.`);\n      return;\n    }\n    selectedModeles[brand].add(model);\n    chip?.classList.add('selected');\n  }\n}"))
+
+          replacements.append((
+          '<span class="reco-score">${r.score}% compatible</span>',
+          '<span class="reco-score">${r.score}/100</span>'))
+
+          old_payload = """  const payload={
+    // Contact
+    prenom,nom,email,telephone:tel,
+    ville:       document.getElementById('ville').value.trim()||'',
+    codepostal:  document.getElementById('codepostal').value.trim()||'',
+    // Consentements RGPD
+    optin_cgu:         optinCGU,
+    optin_partenaires: document.getElementById('optin-partenaires').checked,
+    optin_canaux:      document.getElementById('optin-canaux').checked,
+    canaux_choisis:    canaux,
+    // Profil (ordre logique)
+    delai:             answers[0]||'',
+    type_achat:        answers[1]||'',
+    financement:       answers[2]||'',
+    budget:            answers[3]||'',
+    nb_personnes:      answers[4]||'',
+    usage:             answers[5]||'',
+    kilometrage:       answers[6]||'',
+    motorisation:      answers[7]||'',
+    borne_recharge:    answers[8]||'',
+    boite:             answers[9]||'',
+    priorite:          answers[10]||'',
+    carrosserie:       document.getElementById('type_vehicule').value||'',
+    marques_modeles:   JSON.stringify(getMarquesModelesPaylod()),
+    duree_conservation:answers[12]||'',
+    note_libre:        document.getElementById('note_libre').value.trim()||'',
+  };"""
+          new_payload = """  const payload={
+    contact:{
+      prenom,nom,email,telephone:tel,
+      ville:document.getElementById('ville').value.trim()||'',
+      codepostal:document.getElementById('codepostal').value.trim()||''
+    },
+    profile:{
+      delai:answers[0]||'',
+      type_achat:answers[1]||'',
+      financement:answers[2]||'',
+      budget:answers[3]||'',
+      nb_personnes:answers[4]||'',
+      usage:answers[5]||'',
+      kilometrage:answers[6]||'',
+      motorisation:answers[7]||'',
+      borne_recharge:answers[8]||'',
+      boite:answers[9]||'',
+      priorite:answers[10]||'',
+      carrosserie:document.getElementById('type_vehicule').value||'',
+      marques_modeles:getMarquesModelesPaylod(),
+      duree_conservation:answers[12]||'',
+      note_libre:document.getElementById('note_libre').value.trim()||''
+    },
+    consent:{
+      optin_cgu:optinCGU,
+      optin_partenaires:document.getElementById('optin-partenaires').checked,
+      optin_canaux:document.getElementById('optin-canaux').checked,
+      canaux_choisis:canaux
+    }
+  };"""
+          replacements.append((old_payload,new_payload))
+          replacements.append((
+          "    if(data.success&&data.recommendations?.length){renderResults(data,prenom);}\n    else{showFallback(prenom,nom,data.error||'');}",
+          "    if(data.success&&Array.isArray(data.recommendations)&&data.recommendations.length===3){renderResults(data,prenom);}\n    else{showFallback(prenom,nom,data.message||'');}"))
+
+          for old,new in replacements:
+              if old not in s:
+                  raise SystemExit('Expected block not found')
+              s=s.replace(old,new,1)
+
+          # Replace “Tous les modèles” behavior: select at most three.
+          old = """function toggleAllModeles(brand){
+  const brand_data = ALL_BRANDS.find(b=>b.b===brand);
+  if(!brand_data) return;
+  const models = [...new Set(brand_data.m)];
+  const allSelected = models.every(m => selectedModeles[brand]?.has(m));
+  const id = cssId(brand);
+  if(allSelected){
+    // Tout déselectionner
+    selectedModeles[brand] = new Set();
+    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.remove('selected'));
+  } else {
+    // Tout sélectionner
+    selectedModeles[brand] = new Set(models);
+    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.add('selected'));
+  }
+}"""
+          new = """function toggleAllModeles(brand){
+  const brand_data = ALL_BRANDS.find(b=>b.b===brand);
+  if(!brand_data) return;
+  const models = [...new Set(brand_data.m)];
+  const id = cssId(brand);
+  const selected = selectedModeles[brand] || new Set();
+  if(selected.size > 0){
+    selectedModeles[brand] = new Set();
+    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.remove('selected'));
+    return;
+  }
+  const limited = models.slice(0, MAX_MODELES_PAR_MARQUE);
+  selectedModeles[brand] = new Set(limited);
+  limited.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.add('selected'));
+}"""
+          if old not in s:
+              raise SystemExit('toggleAllModeles block not found')
+          s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Commit to v2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add jeconduis/recommendation_auto.html
+          git commit -m "V2: align landing and limit brand/model selection"
+          git push origin HEAD:v2
