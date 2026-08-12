@@ -1076,7 +1076,7 @@ try {
     data.message || 'Impossible de générer les recommandations.'
   );
 
-} catch (err) {
+  } catch (err) {
   clearInterval(loaderInterval);
 
   console.error('[Je-Conduis FETCH]', err);
@@ -1086,6 +1086,7 @@ try {
     nom,
     'Impossible de contacter le serveur.'
   );
+  }
 }
 
 function showFallback(prenom,nom,msg){
