@@ -839,22 +839,6 @@ function toggleModele(brand, model){
   chip?.classList.add('selected');
 }
 
-function toggleAllModeles(brand){
-  const brand_data = ALL_BRANDS.find(b=>b.b===brand);
-  if(!brand_data) return;
-  const models = [...new Set(brand_data.m)];
-  const allSelected = models.every(m => selectedModeles[brand]?.has(m));
-  const id = cssId(brand);
-  if(allSelected){
-    // Tout déselectionner
-    selectedModeles[brand] = new Set();
-    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.remove('selected'));
-  } else {
-    // Tout sélectionner
-    selectedModeles[brand] = new Set(models);
-    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.add('selected'));
-  }
-}
 
 // Retourne un résumé texte pour le récap et le payload
 function getMarquesModelesSummary(){
