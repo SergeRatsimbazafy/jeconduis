@@ -41,7 +41,9 @@ class RecommendationPdf
         $filename = 'recommendation-' . date('Ymd-His') . '-' . bin2hex(random_bytes(5)) . '.pdf';
         $path = $this->directory . '/' . $filename;
 
-        file_put_contents($path, $dompdf->output());
+        if (file_put_contents($path, $dompdf->output()) === false) {
+            throw new RuntimeException('Impossible d\'écrire le PDF.');
+        }
 
         return $path;
     }
@@ -58,31 +60,54 @@ class RecommendationPdf
             $carrosserie = htmlspecialchars($r['carrosserie'], ENT_QUOTES, 'UTF-8');
             $justification = htmlspecialchars($r['justification'], ENT_QUOTES, 'UTF-8');
             $vigilance = htmlspecialchars($r['point_vigilance'], ENT_QUOTES, 'UTF-8');
-            $score = $r['score'];
+            $score = max(0, min(100, (int) $r['score']));
+            $scoreBar = $this->scoreBar($score);
 
             $points = '';
-            foreach ($r['points_forts'] as $point) {
-                $points .= '<li>' . htmlspecialchars($point, ENT_QUOTES, 'UTF-8') . '</li>';
+            foreach (array_slice($r['points_forts'], 0, 3) as $point) {
+                $points .= '<li>✓ ' . htmlspecialchars($point, ENT_QUOTES, 'UTF-8') . '</li>';
             }
 
             $recommendations .= <<<HTML
 <section class="card">
     <div class="head">
-        <div>
+        <div class="vehicle-title">
             <span class="rank">#{$r['rank']}</span>
             <h2>{$name}</h2>
             <div class="muted">{$version}</div>
         </div>
-        <div class="score">{$score}<small>/100</small></div>
+        <div class="score-box">
+            <div class="score">{$score}<small>/100</small></div>
+            <div class="score-bar">{$scoreBar}</div>
+            <div class="score-label">Très bon match</div>
+        </div>
     </div>
-    <table>
-        <tr><td>Carrosserie</td><td>{$carrosserie}</td><td>Motorisation</td><td>{$motorisation}</td></tr>
-        <tr><td>Neuf</td><td>{$formatter->priceRange($r, 'neuf')}</td><td>Occasion</td><td>{$formatter->priceRange($r, 'occasion')}</td></tr>
+
+    <table class="specs">
+        <tr>
+            <td>Carrosserie</td><td>{$carrosserie}</td>
+            <td>Motorisation</td><td>{$motorisation}</td>
+        </tr>
+        <tr>
+            <td>Neuf</td><td>{$formatter->priceRange($r, 'neuf')}</td>
+            <td>Occasion</td><td>{$formatter->priceRange($r, 'occasion')}</td>
+        </tr>
     </table>
-    <p class="justification">{$justification}</p>
+
+    <div class="why">
+        <strong>Pourquoi ce véhicule ?</strong>
+        <p>{$justification}</p>
+    </div>
+
     <div class="columns">
-        <div><strong>Points forts</strong><ul>{$points}</ul></div>
-        <div><strong>Point de vigilance</strong><p>{$vigilance}</p></div>
+        <div class="strengths">
+            <strong>Points forts</strong>
+            <ul>{$points}</ul>
+        </div>
+        <div class="warning">
+            <strong>Point de vigilance</strong>
+            <p>⚠ {$vigilance}</p>
+        </div>
     </div>
 </section>
 HTML;
@@ -97,29 +122,38 @@ HTML;
 <head>
 <meta charset="UTF-8">
 <style>
-@page { margin: 34px 36px; }
-body { font-family: DejaVu Sans, sans-serif; color:#172033; font-size:10px; line-height:1.45; }
-.header { border-bottom:3px solid #f2c230; padding-bottom:14px; margin-bottom:20px; }
+@page { margin: 30px 34px; }
+body { font-family: DejaVu Sans, sans-serif; color:#172033; font-size:9.5px; line-height:1.4; }
+.header { border-bottom:3px solid #f2c230; padding-bottom:12px; margin-bottom:17px; }
 .brand { font-size:22px; font-weight:700; color:#0f2747; }
-.subtitle { color:#667085; margin-top:4px; }
-h1 { font-size:19px; color:#0f2747; margin:0 0 5px; }
-h2 { display:inline; font-size:16px; color:#0f2747; margin:0; }
-.card { border:1px solid #dfe4ea; border-radius:8px; padding:13px; margin-bottom:14px; page-break-inside:avoid; }
-.head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
-.rank { display:inline-block; background:#0f2747; color:#fff; padding:3px 7px; border-radius:4px; margin-right:7px; font-weight:bold; }
-.muted { color:#667085; margin-top:5px; }
-.score { font-size:20px; font-weight:700; color:#0f2747; }
-.score small { font-size:9px; color:#667085; }
-table { width:100%; border-collapse:collapse; margin:8px 0; }
-td { border:1px solid #e6e9ee; padding:6px; }
-td:nth-child(odd) { font-weight:700; background:#f4f6f9; width:17%; }
-.justification { margin:10px 0; }
+.subtitle { color:#667085; margin-top:3px; }
+h1 { font-size:18px; color:#0f2747; margin:0 0 4px; }
+h2 { display:inline; font-size:15px; color:#0f2747; margin:0; }
+.card { border:1px solid #dfe4ea; border-radius:8px; padding:12px; margin-bottom:12px; page-break-inside:avoid; }
+.head { display:table; width:100%; margin-bottom:9px; }
+.vehicle-title, .score-box { display:table-cell; vertical-align:top; }
+.score-box { width:125px; text-align:right; }
+.rank { display:inline-block; background:#0f2747; color:#fff; padding:3px 7px; border-radius:4px; margin-right:6px; font-weight:bold; }
+.muted { color:#667085; margin-top:4px; }
+.score { font-size:20px; font-weight:700; color:#0f2747; line-height:1; }
+.score small { font-size:8px; color:#667085; }
+.score-bar { margin-top:5px; height:7px; border-radius:5px; background:#e6e9ee; overflow:hidden; text-align:left; }
+.score-fill { display:block; height:7px; background:#f2c230; }
+.score-label { color:#667085; font-size:7.5px; margin-top:3px; }
+table.specs { width:100%; border-collapse:collapse; margin:7px 0 9px; }
+td { border:1px solid #e6e9ee; padding:5px; }
+td:nth-child(odd) { font-weight:700; background:#f4f6f9; width:16%; }
+.why { border-left:3px solid #f2c230; padding-left:9px; margin:8px 0; }
+.why p { margin:3px 0 0; }
 .columns { display:table; width:100%; }
-.columns > div { display:table-cell; width:50%; vertical-align:top; padding-right:12px; }
-ul { margin:5px 0 0; padding-left:16px; }
+.columns > div { display:table-cell; width:50%; vertical-align:top; padding-right:10px; }
+.columns p { margin:4px 0 0; }
+ul { margin:4px 0 0; padding-left:0; list-style:none; }
 li { margin-bottom:3px; }
-.summary { background:#f4f6f9; border-left:4px solid #f2c230; padding:12px; margin-top:16px; page-break-inside:avoid; }
-.footer { margin-top:20px; color:#667085; font-size:8px; text-align:center; }
+.warning { color:#172033; }
+.summary { background:#f4f6f9; border-left:4px solid #f2c230; padding:11px; margin-top:14px; page-break-inside:avoid; }
+.summary strong { color:#0f2747; }
+.footer { margin-top:16px; color:#667085; font-size:7.5px; text-align:center; }
 </style>
 </head>
 <body>
@@ -128,10 +162,10 @@ li { margin-bottom:3px; }
     <div class="subtitle">Votre recommandation automobile personnalisée</div>
 </div>
 <h1>Bonjour {$prenom}, voici vos 3 recommandations</h1>
-<p class="subtitle">Analyse basée sur les critères renseignés dans votre questionnaire.</p>
+<p class="subtitle">Une sélection basée sur les critères renseignés dans votre questionnaire.</p>
 {$recommendations}
 <div class="summary">
-    <strong>Conseil global</strong><br>{$global}
+    <strong>Notre conseil</strong><br>{$global}
     <br><br>
     <strong>Analyse du budget</strong><br>{$budget}
 </div>
@@ -139,5 +173,10 @@ li { margin-bottom:3px; }
 </body>
 </html>
 HTML;
+    }
+
+    private function scoreBar(int $score): string
+    {
+        return '<span class="score-fill" style="width:' . $score . '%"></span>';
     }
 }
