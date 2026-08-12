@@ -1,0 +1,137 @@
+name: Update recommendation landing V2
+
+on:
+  push:
+    branches: [v2]
+    paths:
+      - '.github/workflows/update-landing-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-landing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v2
+
+      - name: Patch recommendation_auto.html
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('jeconduis/recommendation_auto.html')
+          s = path.read_text(encoding='utf-8')
+
+          def rep(old, new, label):
+              global s
+              if old not in s:
+                  raise SystemExit(f'Pattern not found: {label}')
+              s = s.replace(old, new, 1)
+
+          rep(
+          "const selectedMarques = new Set();   // marques ajoutées\nconst selectedModeles = {};          // { marque: Set(modeles) }",
+          "const MAX_MARQUES = 3;\nconst MAX_MODELES_PAR_MARQUE = 3;\nconst selectedMarques = new Set();   // marques ajoutées\nconst selectedModeles = {};          // { marque: Set(modeles) }",
+          'selection constants')
+
+          rep(
+          "function addMarque(brandName){\n  if(!brandName || selectedMarques.has(brandName)) return;\n  selectedMarques.add(brandName);",
+          "function addMarque(brandName){\n  if(!brandName || selectedMarques.has(brandName)) return;\n  if(selectedMarques.size >= MAX_MARQUES){\n    alert(`Vous pouvez sélectionner au maximum ${MAX_MARQUES} marques.`);\n    return;\n  }\n  selectedMarques.add(brandName);",
+          'brand limit')
+
+          rep(
+          "  } else {\n    selectedModeles[brand].add(model);\n    chip?.classList.add('selected');\n  }\n}",
+          "  } else {\n    if(selectedModeles[brand].size >= MAX_MODELES_PAR_MARQUE){\n      alert(`Vous pouvez sélectionner au maximum ${MAX_MODELES_PAR_MARQUE} modèles pour ${brand}.`);\n      return;\n    }\n    selectedModeles[brand].add(model);\n    chip?.classList.add('selected');\n  }\n}",
+          'model limit')
+
+          rep(
+          "function toggleAllModeles(brand){\n  const brand_data = ALL_BRANDS.find(b=>b.b===brand);\n  if(!brand_data) return;\n  const models = [...new Set(brand_data.m)];\n  const allSelected = models.every(m => selectedModeles[brand]?.has(m));\n  const id = cssId(brand);\n  if(allSelected){\n    // Tout déselectionner\n    selectedModeles[brand] = new Set();\n    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.remove('selected'));\n  } else {\n    // Tout sélectionner\n    selectedModeles[brand] = new Set(models);\n    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.add('selected'));\n  }\n}",
+          "function toggleAllModeles(brand){\n  const brand_data = ALL_BRANDS.find(b=>b.b===brand);\n  if(!brand_data) return;\n  const models = [...new Set(brand_data.m)];\n  const id = cssId(brand);\n  const selected = selectedModeles[brand] || new Set();\n  if(selected.size > 0){\n    selectedModeles[brand] = new Set();\n    models.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.remove('selected'));\n    return;\n  }\n  const limited = models.slice(0, MAX_MODELES_PAR_MARQUE);\n  selectedModeles[brand] = new Set(limited);\n  limited.forEach(m => document.getElementById('chip-'+id+'-'+cssId(m))?.classList.add('selected'));\n  alert(`Sélection limitée aux ${MAX_MODELES_PAR_MARQUE} premiers modèles. Vous pouvez les modifier manuellement.`);\n}",
+          'toggle all models')
+
+          rep(
+          '<span class="reco-score">${r.score}% compatible</span>',
+          '<span class="reco-score">${r.score}/100</span>',
+          'score display')
+
+          old_payload = """  const payload={
+    // Contact
+    prenom,nom,email,telephone:tel,
+    ville:       document.getElementById('ville').value.trim()||'',
+    codepostal:  document.getElementById('codepostal').value.trim()||'',
+    // Consentements RGPD
+    optin_cgu:         optinCGU,
+    optin_partenaires: document.getElementById('optin-partenaires').checked,
+    optin_canaux:      document.getElementById('optin-canaux').checked,
+    canaux_choisis:    canaux,
+    // Profil (ordre logique)
+    delai:             answers[0]||'',
+    type_achat:        answers[1]||'',
+    financement:       answers[2]||'',
+    budget:            answers[3]||'',
+    nb_personnes:      answers[4]||'',
+    usage:             answers[5]||'',
+    kilometrage:       answers[6]||'',
+    motorisation:      answers[7]||'',
+    borne_recharge:    answers[8]||'',
+    boite:             answers[9]||'',
+    priorite:          answers[10]||'',
+    carrosserie:       document.getElementById('type_vehicule').value||'',
+    marques_modeles:   JSON.stringify(getMarquesModelesPaylod()),
+    duree_conservation:answers[12]||'',
+    note_libre:        document.getElementById('note_libre').value.trim()||'',
+  };"""
+
+          new_payload = """  const payload={
+    contact:{
+      prenom,
+      nom,
+      email,
+      telephone:tel,
+      ville:document.getElementById('ville').value.trim()||'',
+      codepostal:document.getElementById('codepostal').value.trim()||''
+    },
+    profile:{
+      delai:answers[0]||'',
+      type_achat:answers[1]||'',
+      financement:answers[2]||'',
+      budget:answers[3]||'',
+      nb_personnes:answers[4]||'',
+      usage:answers[5]||'',
+      kilometrage:answers[6]||'',
+      motorisation:answers[7]||'',
+      borne_recharge:answers[8]||'',
+      boite:answers[9]||'',
+      priorite:answers[10]||'',
+      carrosserie:document.getElementById('type_vehicule').value||'',
+      marques_modeles:getMarquesModelesPaylod(),
+      duree_conservation:answers[12]||'',
+      note_libre:document.getElementById('note_libre').value.trim()||''
+    },
+    consent:{
+      optin_cgu:optinCGU,
+      optin_partenaires:document.getElementById('optin-partenaires').checked,
+      optin_canaux:document.getElementById('optin-canaux').checked,
+      canaux_choisis:canaux
+    }
+  };"""
+          rep(old_payload, new_payload, 'nested V2 payload')
+
+          rep(
+          "    if(data.success&&data.recommendations?.length){renderResults(data,prenom);}\n    else{showFallback(prenom,nom,data.error||'');}",
+          "    if(data.success&&Array.isArray(data.recommendations)&&data.recommendations.length===3){renderResults(data,prenom);}\n    else{showFallback(prenom,nom,data.message||'');}",
+          'response handling')
+
+          path.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit landing update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add jeconduis/recommendation_auto.html
+          git diff --cached --quiet && exit 0
+          git commit -m "V2: align landing payload and limit brands/models"
+          git push origin v2
