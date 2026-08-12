@@ -740,6 +740,8 @@ const ALL_BRANDS=[{b:"Renault",m:["Arkana","Austral","Captur","Clio","Espace E-T
 /* ══ SYSTÈME MULTI-MARQUES ════════════════════════════════════════════════ */
 const selectedMarques = new Set();   // marques ajoutées
 const selectedModeles = {};          // { marque: Set(modeles) }
+const MAX_MARQUES = 3;
+const MAX_MODELES_PAR_MARQUE = 3;
 
 function populateMarques(){
   const sel = document.getElementById('marque-picker');
