@@ -97,11 +97,7 @@ try {
         );
     } catch (Throwable $e) {
         error_log('[JeConduis MAIL] ' . $e->getMessage());
-        respond(
-            false,
-            'La recommandation a été générée mais l’email n’a pas pu être envoyé.',
-            502
-        );
+        respond(false, 'La recommandation a été générée mais l’email n’a pas pu être envoyé.', 502);
     }
 
     $leadId = null;
@@ -183,6 +179,8 @@ function validateResult(array $result): void
         throw new RuntimeException('Le JSON doit contenir exactement 3 recommandations.');
     }
 
+    $seenRanks = [];
+
     foreach ($result['recommendations'] as $index => $item) {
         if (!is_array($item)) {
             throw new RuntimeException('Recommandation #' . ($index + 1) . ' invalide.');
@@ -190,6 +188,7 @@ function validateResult(array $result): void
 
         foreach ([
             'rank', 'marque', 'modele', 'version', 'carrosserie', 'motorisation',
+            'prix_neuf_min', 'prix_neuf_max', 'prix_occasion_min', 'prix_occasion_max',
             'score', 'justification', 'points_forts', 'point_vigilance'
         ] as $key) {
             if (!array_key_exists($key, $item)) {
@@ -197,13 +196,51 @@ function validateResult(array $result): void
             }
         }
 
+        $rank = (int) $item['rank'];
+        if ($rank < 1 || $rank > 3 || isset($seenRanks[$rank])) {
+            throw new RuntimeException('Rang invalide ou dupliqué.');
+        }
+        $seenRanks[$rank] = true;
+
+        foreach (['prix_neuf_min', 'prix_neuf_max', 'prix_occasion_min', 'prix_occasion_max'] as $priceKey) {
+            if (!is_int($item[$priceKey]) && !is_float($item[$priceKey])) {
+                throw new RuntimeException('Prix invalide : ' . $priceKey);
+            }
+            if ((float) $item[$priceKey] < 0) {
+                throw new RuntimeException('Prix négatif interdit : ' . $priceKey);
+            }
+        }
+
+        if ((float) $item['prix_neuf_min'] > (float) $item['prix_neuf_max'] && (float) $item['prix_neuf_max'] > 0) {
+            throw new RuntimeException('Fourchette de prix neuf invalide.');
+        }
+        if ((float) $item['prix_occasion_min'] > (float) $item['prix_occasion_max'] && (float) $item['prix_occasion_max'] > 0) {
+            throw new RuntimeException('Fourchette de prix occasion invalide.');
+        }
+
         if (!is_array($item['points_forts']) || count($item['points_forts']) !== 3) {
             throw new RuntimeException('points_forts invalide.');
+        }
+        foreach ($item['points_forts'] as $point) {
+            if (!is_string($point) || trim($point) === '') {
+                throw new RuntimeException('Chaque point fort doit être une chaîne non vide.');
+            }
         }
 
         $score = (int) $item['score'];
         if ($score < 80 || $score > 100) {
             throw new RuntimeException('Score invalide.');
+        }
+    }
+
+    ksort($seenRanks);
+    if (array_keys($seenRanks) !== [1, 2, 3]) {
+        throw new RuntimeException('Les rangs doivent être exactement 1, 2 et 3.');
+    }
+
+    foreach (['conseil_global', 'budget_analyse'] as $key) {
+        if (!array_key_exists($key, $result) || !is_string($result[$key])) {
+            throw new RuntimeException('Champ global manquant ou invalide : ' . $key);
         }
     }
 }
