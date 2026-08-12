@@ -850,7 +850,7 @@ function getMarquesModelesSummary(){
   return parts.join(' | ');
 }
 
-function getMarquesModelesPaylod(){
+function getMarquesModelesPayload(){
   const result = {};
   selectedMarques.forEach(brand => {
     result[brand] = selectedModeles[brand] ? [...selectedModeles[brand]] : [];
