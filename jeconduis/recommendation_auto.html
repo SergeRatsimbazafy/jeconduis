@@ -759,8 +759,15 @@ function populateMarques(){
 
 function addMarque(brandName){
   if(!brandName || selectedMarques.has(brandName)) return;
+
+  if(selectedMarques.size >= MAX_MARQUES){
+    alert(`Vous pouvez sélectionner au maximum ${MAX_MARQUES} marques.`);
+    return;
+  }
+
   selectedMarques.add(brandName);
   selectedModeles[brandName] = new Set();
+
   renderMarqueTags();
   renderModeleBloc(brandName);
 }
@@ -803,7 +810,6 @@ function renderModeleBloc(brandName){
       <span>${models.length} modèles disponibles</span>
     </div>
     <div class="modele-options" id="chips-${id}">
-      <div class="modele-chip modele-chip-all" onclick="toggleAllModeles('${brandName.replace(/'/g,"\\'")}')">Tous les modèles</div>
       ${models.map(m=>`<div class="modele-chip" onclick="toggleModele('${brandName.replace(/'/g,"\\'")}','${m.replace(/'/g,"\\'")}')" id="chip-${id}-${cssId(m)}">${m}</div>`).join('')}
     </div>`;
   container.appendChild(bloc);
@@ -811,16 +817,26 @@ function renderModeleBloc(brandName){
 
 function toggleModele(brand, model){
   if(!selectedModeles[brand]) return;
+
   const id = cssId(brand);
-  const chipId = 'chip-'+id+'-'+cssId(model);
+  const chipId = 'chip-' + id + '-' + cssId(model);
   const chip = document.getElementById(chipId);
+
   if(selectedModeles[brand].has(model)){
     selectedModeles[brand].delete(model);
     chip?.classList.remove('selected');
-  } else {
-    selectedModeles[brand].add(model);
-    chip?.classList.add('selected');
+    return;
   }
+
+  if(selectedModeles[brand].size >= MAX_MODELES_PAR_MARQUE){
+    alert(
+      `Vous pouvez sélectionner au maximum ${MAX_MODELES_PAR_MARQUE} modèles pour ${brand}.`
+    );
+    return;
+  }
+
+  selectedModeles[brand].add(model);
+  chip?.classList.add('selected');
 }
 
 function toggleAllModeles(brand){
