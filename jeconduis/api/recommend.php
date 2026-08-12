@@ -87,17 +87,27 @@ try {
     }
 
     try {
-        (new MailService())->sendRecommendation(
-            $contact,
-            $profileData,
-            $formatted['recommendations'],
-            $formatted['conseil_global'],
-            $formatted['budget_analyse'],
-            $pdfPath !== '' ? $pdfPath : null
-        );
+    $mailSent = (new MailService())->sendRecommendation(
+        $contact,
+        $profileData,
+        $formatted['recommendations'],
+        $formatted['conseil_global'],
+        $formatted['budget_analyse'],
+        $pdfPath !== '' ? $pdfPath : null
+    );
+
+    if (!$mailSent) {
+        throw new RuntimeException('Je-Conduis.com n’a pas pu envoyer le message.');
+    }
+
     } catch (Throwable $e) {
-        error_log('[JeConduis MAIL] ' . $e->getMessage());
-        respond(false, 'La recommandation a été générée mais l’email n’a pas pu être envoyé.', 502);
+    error_log('[JeConduis MAIL] ' . $e->getMessage());
+
+    respond(
+        false,
+        'La recommandation a été générée mais l’email n’a pas pu être envoyé.',
+        502
+    );
     }
 
     $leadId = null;
